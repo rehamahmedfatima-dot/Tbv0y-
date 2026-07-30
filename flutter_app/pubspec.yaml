@@ -1,1 +1,104 @@
+name: tbvoy
+description: "TBVOY — The Best Version Of Yourself. Small Actions. Big Transformation."
+publish_to: 'none'
+version: 1.0.0+1
 
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Firebase — push notifications only (auth handled by Supabase)
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.0.4
+
+  # Native OAuth flows used together with Supabase Auth
+  google_sign_in: ^6.2.1
+  sign_in_with_apple: ^6.1.1
+
+  # Supabase — database + auth (Google/Apple/Email/Anonymous/OTP) + storage
+  supabase_flutter: ^2.5.9
+
+  # Gemini AI (Google AI Studio)
+  google_generative_ai: ^0.4.6
+  flutter_dotenv: ^5.1.0
+
+  # Local storage / offline
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.3
+  path_provider: ^2.1.3
+
+  # Networking
+  dio: ^5.4.3+1
+  connectivity_plus: ^6.0.3
+
+  # Charts & visuals
+  fl_chart: ^0.68.0
+  lottie: ^3.1.2
+  shimmer: ^3.0.0
+
+  # UI
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10+1
+  glassmorphism: ^3.0.0
+  flutter_staggered_animations: ^1.1.1
+  table_calendar: ^3.1.2
+  syncfusion_flutter_charts: ^26.2.7
+
+  # Forms & validation
+  flutter_form_builder: ^9.3.0
+  form_builder_validators: ^11.0.0
+
+  # Security
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+  encrypt: ^5.0.3
+
+  # AI / voice
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.0.2
+
+  # Utils
+  intl: ^0.19.0
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  uuid: ^4.4.2
+  crypto: ^3.0.5
+  logger: ^2.4.0
+  permission_handler: ^11.3.1
+  package_info_plus: ^8.0.0
+  share_plus: ^9.0.0
+  pdf: ^3.11.0
+  csv: ^6.0.0
+  cached_network_image: ^3.3.1
+  image_picker: ^1.1.2
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.0
+  freezed: ^2.5.5
+  json_serializable: ^6.8.0
+  hive_generator: ^2.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/fonts/
