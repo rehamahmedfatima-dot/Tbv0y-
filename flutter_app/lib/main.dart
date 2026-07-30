@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/config/env_config.dart';
 import 'core/network/supabase_service.dart';
+import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/presentation/screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,21 +18,20 @@ Future<void> main() async {
   runApp(const ProviderScope(child: TbvoyApp()));
 }
 
-class TbvoyApp extends StatelessWidget {
+class TbvoyApp extends ConsumerWidget {
   const TbvoyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+
+    return MaterialApp.router(
       title: 'TBVOY',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      // Replaced by go_router (core/router/app_router.dart) once
-      // onboarding/home/etc. land in later phases — kept simple here
-      // so Phase 2 (auth) is runnable on its own.
-      home: const LoginScreen(),
+      routerConfig: router,
     );
   }
 }
