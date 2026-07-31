@@ -1,0 +1,11 @@
+{
+  "name": "TBVOY Flutter Dev",
+  "image": "ghcr.io/cirruslabs/flutter:stable",
+  "postCreateCommand": "cd flutter_app && flutter pub get && flutter config --enable-web",
+  "forwardPorts": [8080],
+  "customizations": {
+    "vscode": {
+      "extensions": ["Dart-Code.flutter", "Dart-Code.dart-code"]
+    }
+  }
+}
