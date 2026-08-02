@@ -8,6 +8,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
+import '../../../core/network/backend_api_client.dart';
 import '../../../core/network/supabase_service.dart';
 import 'app_user.dart';
 import 'auth_exceptions.dart';
@@ -246,11 +247,11 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> deleteAccount() async {
-    // Account deletion requires the service_role key and must run
-    // server-side (FastAPI /auth/delete-account) — never expose that key
-    // in the client. This calls the backend endpoint.
+    // Account deletion needs the service_role key and must run
+    // server-side — the FastAPI backend's DELETE /account endpoint
+    // (see backend/app/api/routes/account.py) does this, never the client.
     try {
-      await _client.functions.invoke('delete-account');
+      await BackendApiClient.instance.deleteAccount();
       await signOut();
     } catch (e) {
       throw AuthExceptionMapper.map(e);
