@@ -69,19 +69,26 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                      backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
-                      child: user?.photoUrl == null
-                          ? const Icon(Icons.person_rounded, color: AppColors.primary)
-                          : null,
+                    InkWell(
+                      onTap: () => context.push('/settings'),
+                      customBorder: const CircleBorder(),
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                        backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
+                        child: user?.photoUrl == null
+                            ? const Icon(Icons.person_rounded, color: AppColors.primary)
+                            : null,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                _AiMessageBanner(message: dashboard.motivationalMessage),
+                _AiMessageBanner(
+                  message: dashboard.motivationalMessage,
+                  onTap: () => context.push('/coach'),
+                ),
                 const SizedBox(height: AppSpacing.md),
 
                 DisciplineScoreCard(
@@ -136,6 +143,33 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
+                Text('Quick Actions', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    _QuickAction(icon: Icons.menu_book_outlined, label: 'Journal', onTap: () => context.push('/journal')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.mood_outlined, label: 'Mood', onTap: () => context.push('/mood')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.flag_outlined, label: 'Goals', onTap: () => context.push('/goals')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.timer_outlined, label: 'Focus', onTap: () => context.push('/focus')),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    _QuickAction(icon: Icons.map_outlined, label: 'My Journey', onTap: () => context.push('/my-journey')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.emoji_events_outlined, label: 'Challenges', onTap: () => context.push('/challenges')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.military_tech_outlined, label: 'Badges', onTap: () => context.push('/achievements')),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(icon: Icons.history_rounded, label: 'Time Machine', onTap: () => context.push('/time-machine')),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -186,27 +220,64 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _AiMessageBanner extends StatelessWidget {
-  final String message;
-  const _AiMessageBanner({required this.message});
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickAction({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.secondary.withValues(alpha: 0.08),
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.auto_awesome_rounded, color: AppColors.secondary, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(message, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
-        ],
+          child: Column(
+            children: [
+              Icon(icon, color: AppColors.primary),
+              const SizedBox(height: AppSpacing.xs),
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiMessageBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onTap;
+  const _AiMessageBanner({required this.message, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.secondary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded, color: AppColors.secondary, size: 20),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 18),
+          ],
+        ),
       ),
     );
   }
