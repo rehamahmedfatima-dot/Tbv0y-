@@ -42,9 +42,12 @@ tbvoy/
         │   ├── goals/                # Phase 5
         │   ├── focus_mode/           # Phase 5
         │   ├── challenges/           # Phase 6
+        │   ├── achievements/         # Phase 6
+        │   ├── skills/               # Phase 6
+        │   ├── books/                # Phase 6
+        │   ├── letters/              # Phase 6
         │   ├── my_journey/           # Phase 6
         │   ├── my_story/             # Phase 6
-        │   ├── growth_tree/          # Phase 6
         │   ├── time_machine/         # Phase 6
         │   ├── legacy/               # Phase 6
         │   ├── notifications/        # Phase 8
@@ -61,13 +64,20 @@ Each feature module follows Clean Architecture internally:
 ## Build roadmap
 
 - [x] **Phase 1** — Database schema + Flutter project foundation (theme, spacing, pubspec)
-- [~] **Phase 2** — Auth (Supabase Auth: Google/Apple/Email/Anonymous/OTP/Biometric) ✅ + Onboarding flow (next)
-- [ ] **Phase 3** — Home dashboard + Habits module (full CRUD, offline-first via Hive)
-- [ ] **Phase 4** — AI Coach + Identity Builder + Discipline Score engine
-- [ ] **Phase 5** — Journal, Mood Tracker, Goals, Focus Mode
-- [ ] **Phase 6** — Challenges, My Journey, My Story, Growth Tree, Time Machine, Legacy
-- [ ] **Phase 7** — FastAPI backend (all REST endpoints) + AI integration layer
-- [ ] **Phase 8** — Notifications, Settings, security hardening, export/backup, polish & animations
+- [x] **Phase 2** — Auth (Supabase Auth: Google/Apple/Email/Anonymous/OTP/Biometric) + Onboarding flow (5 pages + AI identity analysis via Gemini) + go_router wiring
+- [x] **Phase 3** — Home dashboard (Discipline Score, Growth Tree, AI mission, mood, weekly chart) + Habits module (full CRUD, streaks, stats)
+- [x] **Phase 4** — AI Coach (chat + weekly/monthly AI reports) + Discipline Score engine (already powering Home in Phase 3)
+- [x] **Phase 5** — Journal (AI summaries + mood-pattern insight), Mood Tracker (chart + AI activity suggestions), Goals (AI roadmap + milestones), Focus Mode (Pomodoro/Deep Work/Forest timer + stats)
+- [x] **Phase 6** — Achievements/XP/Levels, Challenges (30/100-day + custom), Legacy (mission/values/AI alignment check), Time Machine, My Journey (aggregator), My Story (AI annual report)
+- [x] **Phase 7** — FastAPI backend: account deletion, push notifications, and scheduled batch jobs (daily AI missions, nightly discipline score rollup, habit reminders) — see `backend/README.md`
+- [x] **Phase 8** — Settings (theme/language/AI style/notification times), push notifications (FCM + local display), biometric app lock, data export (CSV + PDF)
+
+## 🎉 All 8 phases complete
+TBVOY now has: auth, onboarding, home dashboard, habits, AI coach, journal,
+mood tracking, goals, focus mode, achievements/challenges/skills/books,
+letters, legacy, time machine, My Journey, My Story, a FastAPI backend,
+and settings/notifications/security. See each feature's file-path table
+in the conversation history for exactly where every file goes.
 
 ## Why phased delivery
 
