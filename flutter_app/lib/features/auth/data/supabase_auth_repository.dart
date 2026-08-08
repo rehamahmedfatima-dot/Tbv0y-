@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -234,7 +234,9 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> signOut() async {
     try {
-      if (!Platform.isIOS && !Platform.isAndroid) {
+      final isMobile = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+      if (!isMobile) {
         await _client.auth.signOut();
         return;
       }
