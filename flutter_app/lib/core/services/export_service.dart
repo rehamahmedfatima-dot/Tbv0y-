@@ -1,13 +1,14 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:csv/csv.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 class ExportService {
   /// Flattens the habit_logs table (the most useful table to analyze
-  /// externally) into a CSV file and opens the OS share sheet.
+  /// externally) into a CSV file and opens the OS share sheet / browser
+  /// download. Built entirely from in-memory bytes (no dart:io File) so
+  /// this compiles and runs on web as well as mobile/desktop.
   static Future<void> exportHabitLogsAsCsv(List<dynamic> habitLogs) async {
     final rows = <List<dynamic>>[
       ['habit_id', 'log_date', 'completed', 'value', 'note'],
@@ -22,12 +23,13 @@ class ExportService {
     ];
 
     final csv = const ListToCsvConverter().convert(rows);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/tbvoy_habit_logs.csv');
-    await file.writeAsString(csv);
+    final bytes = Uint8List.fromList(csv.codeUnits);
 
     await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], text: 'My TBVOY habit history'),
+      ShareParams(
+        files: [XFile.fromData(bytes, name: 'tbvoy_habit_logs.csv', mimeType: 'text/csv')],
+        text: 'My TBVOY habit history',
+      ),
     );
   }
 
@@ -55,12 +57,13 @@ class ExportService {
       ),
     );
 
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/tbvoy_data_summary.pdf');
-    await file.writeAsBytes(await doc.save());
+    final bytes = await doc.save();
 
     await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], text: 'My TBVOY data summary'),
+      ShareParams(
+        files: [XFile.fromData(bytes, name: 'tbvoy_data_summary.pdf', mimeType: 'application/pdf')],
+        text: 'My TBVOY data summary',
+      ),
     );
   }
 
