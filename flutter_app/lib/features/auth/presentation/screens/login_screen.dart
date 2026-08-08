@@ -1,204 +1,262 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
-import '../providers/auth_providers.dart';
-import '../widgets/auth_button.dart';
+import '../../../core/network/backend_api_client.dart';
+import '../../../core/network/supabase_service.dart';
+import 'app_user.dart';
+import 'auth_exceptions.dart';
+import 'auth_repository.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class SupabaseAuthRepository implements AuthRepository {
+  final sb.SupabaseClient _client = SupabaseService.client;
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
-}
+  static const _biometricEnabledKey = 'biometric_enabled';
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _obscurePassword = true;
-  String? _loadingAction;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  AppUser? _mapUser(sb.User? user) {
+    if (user == null) return null;
+    return AppUser(
+      id: user.id,
+      email: user.email,
+      displayName: (user.userMetadata?['full_name'] ?? user.userMetadata?['name']) as String?,
+      photoUrl: user.userMetadata?['avatar_url'] as String?,
+      isAnonymous: user.isAnonymous,
+    );
   }
 
-  Future<void> _handle(String action, Future<bool> Function() call) async {
-    setState(() => _loadingAction = action);
-    final ok = await call();
-    if (!mounted) return;
-    setState(() => _loadingAction = null);
+  @override
+  Stream<AppUser?> get authStateChanges =>
+      _client.auth.onAuthStateChange.map((state) => _mapUser(state.session?.user));
 
-    if (ok) {
-      context.go('/home');
-    } else {
-      final message = ref.read(authControllerProvider.notifier).errorMessage ??
-          'Something went wrong. Please try again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppColors.danger),
+  @override
+  AppUser? get currentUser => _mapUser(_client.auth.currentUser);
+
+  // ---------------------------------------------------------------------
+  // Google — native sign-in, token handed to Supabase for verification.
+  // ---------------------------------------------------------------------
+  @override
+  Future<AppUser> signInWithGoogle() async {
+    try {
+      final googleSignIn = GoogleSignIn(
+        // Required for Supabase to verify the ID token server-side.
+        serverClientId: const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID'),
       );
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        throw const AuthException('Sign-in was cancelled.', code: 'cancelled');
+      }
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
+
+      if (idToken == null) {
+        throw const AuthException('Google sign-in failed to return a token.', code: 'no_token');
+      }
+
+      final response = await _client.auth.signInWithIdToken(
+        provider: sb.OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+
+      final user = _mapUser(response.user);
+      if (user == null) throw const AuthException('Google sign-in failed.', code: 'unknown');
+      return user;
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Apple — native sign-in with nonce, iOS only.
+  // ---------------------------------------------------------------------
+  @override
+  Future<AppUser> signInWithApple() async {
+    try {
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw const AuthException('Apple sign-in failed to return a token.', code: 'no_token');
+      }
+
+      final response = await _client.auth.signInWithIdToken(
+        provider: sb.OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+
+      final user = _mapUser(response.user);
+      if (user == null) throw const AuthException('Apple sign-in failed.', code: 'unknown');
+      return user;
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
+
+  String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  // ---------------------------------------------------------------------
+  // Anonymous guest mode
+  // ---------------------------------------------------------------------
+  @override
+  Future<AppUser> signInAnonymously() async {
+    try {
+      final response = await _client.auth.signInAnonymously();
+      final user = _mapUser(response.user);
+      if (user == null) throw const AuthException('Guest sign-in failed.', code: 'unknown');
+      return user;
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Email & password
+  // ---------------------------------------------------------------------
+  @override
+  Future<AppUser> signUpWithEmail({required String email, required String password}) async {
+    try {
+      final response = await _client.auth.signUp(email: email, password: password);
+      final user = _mapUser(response.user);
+      if (user == null) {
+        throw const AuthException(
+          'Account created — check your email to confirm before signing in.',
+          code: 'confirmation_required',
+        );
+      }
+      return user;
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final controller = ref.read(authControllerProvider.notifier);
-    final theme = Theme.of(context);
+  Future<AppUser> signInWithEmail({required String email, required String password}) async {
+    try {
+      final response = await _client.auth.signInWithPassword(email: email, password: password);
+      final user = _mapUser(response.user);
+      if (user == null) throw const AuthException('Sign-in failed.', code: 'unknown');
+      return user;
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
 
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.xxxl),
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: AppColors.primaryGradient,
-                ).createShader(bounds),
-                child: Text(
-                  'TBVOY',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.displayLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Small Actions. Big Transformation.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(email);
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
 
-              Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.mail_outline_rounded),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter your email';
-                        if (!v.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.length < 8) return 'At least 8 characters';
-                        return null;
-                      },
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () => context.push('/forgot-password'),
-                        child: const Text('Forgot password?'),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AuthButton(
-                      label: 'Sign In',
-                      isPrimary: true,
-                      isLoading: _loadingAction == 'email',
-                      onPressed: () {
-                        if (!_formKey.currentState!.validate()) return;
-                        _handle(
-                          'email',
-                          () => controller.signInWithEmail(
-                            _emailController.text.trim(),
-                            _passwordController.text,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
+  // ---------------------------------------------------------------------
+  // OTP verification (used for email confirmation / passwordless flows)
+  // ---------------------------------------------------------------------
+  @override
+  Future<void> sendOtp(String email) async {
+    try {
+      await _client.auth.signInWithOtp(email: email);
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
 
-              const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  child: Text('or continue with', style: theme.textTheme.bodyMedium),
-                ),
-                const Expanded(child: Divider()),
-              ]),
-              const SizedBox(height: AppSpacing.lg),
+  @override
+  Future<void> verifyOtp({required String email, required String token}) async {
+    try {
+      await _client.auth.verifyOTP(
+        email: email,
+        token: token,
+        type: sb.OtpType.email,
+      );
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
 
-              AuthButton(
-                label: 'Continue with Google',
-                icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
-                isLoading: _loadingAction == 'google',
-                onPressed: () => _handle('google', controller.signInWithGoogle),
-              ),
-              if (Platform.isIOS) ...[
-                const SizedBox(height: AppSpacing.md),
-                AuthButton(
-                  label: 'Continue with Apple',
-                  icon: const Icon(Icons.apple_rounded, size: 22),
-                  isLoading: _loadingAction == 'apple',
-                  onPressed: () => _handle('apple', controller.signInWithApple),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              AuthButton(
-                label: 'Continue as Guest',
-                icon: const Icon(Icons.person_outline_rounded),
-                isLoading: _loadingAction == 'guest',
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  _handle('guest', controller.signInAnonymously);
-                },
-              ),
+  // ---------------------------------------------------------------------
+  // Biometric unlock (device-level — gates access to an existing session)
+  // ---------------------------------------------------------------------
+  @override
+  Future<bool> isBiometricAvailable() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      return canCheck && isSupported;
+    } catch (_) {
+      return false;
+    }
+  }
 
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text("Don't have an account?", style: theme.textTheme.bodyMedium),
-                  TextButton(
-                    onPressed: () => context.push('/signup'),
-                    child: const Text('Sign Up'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-          ),
+  @override
+  Future<bool> authenticateWithBiometrics() async {
+    try {
+      return await _localAuth.authenticate(
+        localizedReason: 'Authenticate to open TBVOY',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
         ),
-      ),
-    );
+      );
+    } on Exception {
+      return false;
+    }
+  }
+
+  Future<void> setBiometricEnabled(bool enabled) =>
+      _secureStorage.write(key: _biometricEnabledKey, value: enabled.toString());
+
+  Future<bool> getBiometricEnabled() async =>
+      (await _secureStorage.read(key: _biometricEnabledKey)) == 'true';
+
+  // ---------------------------------------------------------------------
+  @override
+  Future<void> signOut() async {
+    try {
+      final isMobile = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+      if (!isMobile) {
+        await _client.auth.signOut();
+        return;
+      }
+      await GoogleSignIn().signOut().catchError((_) {});
+      await _client.auth.signOut();
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    // Account deletion needs the service_role key and must run
+    // server-side — the FastAPI backend's DELETE /account endpoint
+    // (see backend/app/api/routes/account.py) does this, never the client.
+    try {
+      await BackendApiClient.instance.deleteAccount();
+      await signOut();
+    } catch (e) {
+      throw AuthExceptionMapper.map(e);
+    }
   }
 }
