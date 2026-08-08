@@ -65,8 +65,8 @@ dependencies:
   local_auth: ^2.3.0
   encrypt: ^5.0.3
 
-  # AI / voice
-  speech_to_text: ^7.0.0
+  # Voice input (Future Feature — not yet wired up; add back with a version
+  # compatible with share_plus if/when voice input is implemented)
   flutter_tts: ^4.0.2
 
   # Utils
