@@ -54,7 +54,7 @@ dependencies:
   glassmorphism: ^3.0.0
   flutter_staggered_animations: ^1.1.1
   table_calendar: ^3.1.2
-  syncfusion_flutter_charts: ^26.2.7
+  syncfusion_flutter_charts: ^28.1.38
 
   # Forms & validation
   flutter_form_builder: ^10.0.0
