@@ -27,7 +27,10 @@ dependencies:
   flutter_local_notifications: any
 
   # Native OAuth flows used together with Supabase Auth
-  google_sign_in: any
+  # Pinned (not "any") — v7+ of google_sign_in rewrote its API
+  # (GoogleSignIn.instance / authenticate() instead of GoogleSignIn() /
+  # signIn()), which our code doesn't use.
+  google_sign_in: ^6.2.1
   sign_in_with_apple: any
 
   # Supabase — database + auth (Google/Apple/Email/Anonymous/OTP) + storage
@@ -49,7 +52,9 @@ dependencies:
 
   # Security
   flutter_secure_storage: any
-  local_auth: any
+  # Pinned — newer major versions changed the authenticate() API shape
+  # (AuthenticationOptions/options: param) that our code targets.
+  local_auth: ^2.3.0
   crypto: any # Apple Sign-In nonce hashing
 
   # Dates (journal, goals, mood, time machine)
