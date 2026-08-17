@@ -16,25 +16,64 @@ import 'features/settings/presentation/providers/settings_providers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env');
-  EnvConfig.load(dotenv.env);
+  try {
+    await dotenv.load(fileName: '.env');
+    EnvConfig.load(dotenv.env);
 
-  await SupabaseService.initialize();
+    await SupabaseService.initialize();
 
-  // Firebase (push notifications) needs platform-specific config that
-  // isn't set up yet for the web build (no FirebaseOptions / no
-  // `flutterfire configure` run). Skip it on web for now so the rest of
-  // the app still loads — mobile builds still initialize it normally
-  // once google-services.json / GoogleService-Info.plist are in place.
-  if (!kIsWeb) {
-    try {
-      await Firebase.initializeApp();
-    } catch (_) {
-      // Don't let a missing/misconfigured Firebase block the whole app.
+    // Firebase (push notifications) needs platform-specific config that
+    // isn't set up yet for the web build (no FirebaseOptions / no
+    // `flutterfire configure` run). Skip it on web for now so the rest of
+    // the app still loads — mobile builds still initialize it normally
+    // once google-services.json / GoogleService-Info.plist are in place.
+    if (!kIsWeb) {
+      try {
+        await Firebase.initializeApp();
+      } catch (_) {
+        // Don't let a missing/misconfigured Firebase block the whole app.
+      }
     }
-  }
 
-  runApp(const ProviderScope(child: TbvoyApp()));
+    runApp(const ProviderScope(child: TbvoyApp()));
+  } catch (error, stackTrace) {
+    // Show the real error on screen instead of a silent blank page — this
+    // is temporary scaffolding for diagnosing deployment issues; remove
+    // once the app is verified working end-to-end.
+    runApp(_StartupErrorApp(error: error, stackTrace: stackTrace));
+  }
+}
+
+class _StartupErrorApp extends StatelessWidget {
+  final Object error;
+  final StackTrace stackTrace;
+  const _StartupErrorApp({required this.error, required this.stackTrace});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFFFF1F0),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('TBVOY failed to start',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+                const SizedBox(height: 12),
+                SelectableText('$error', style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+                const SizedBox(height: 12),
+                SelectableText('$stackTrace', style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class TbvoyApp extends ConsumerStatefulWidget {
