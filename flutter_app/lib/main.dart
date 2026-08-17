@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,9 +21,18 @@ Future<void> main() async {
 
   await SupabaseService.initialize();
 
-  // Requires platform config files (google-services.json /
-  // GoogleService-Info.plist) to already be in place — see README.
-  await Firebase.initializeApp();
+  // Firebase (push notifications) needs platform-specific config that
+  // isn't set up yet for the web build (no FirebaseOptions / no
+  // `flutterfire configure` run). Skip it on web for now so the rest of
+  // the app still loads — mobile builds still initialize it normally
+  // once google-services.json / GoogleService-Info.plist are in place.
+  if (!kIsWeb) {
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {
+      // Don't let a missing/misconfigured Firebase block the whole app.
+    }
+  }
 
   runApp(const ProviderScope(child: TbvoyApp()));
 }
@@ -43,7 +53,7 @@ class _TbvoyAppState extends ConsumerState<TbvoyApp> {
     // Only load settings once there's a signed-in user — the settings
     // table is scoped per-user and there's nothing to load before login.
     ref.listen(authStateProvider, (previous, next) {
-      if (next.valueOrNull != null && previous?.valueOrNull == null) {
+      if (next.valueOrNull != null && previous?.valueOrNull == null && !kIsWeb) {
         PushNotificationService.initialize();
       }
     });
