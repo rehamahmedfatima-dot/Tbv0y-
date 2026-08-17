@@ -12,6 +12,12 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <title>TBVOY</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- TEMPORARY — mobile debug console. Remove once the blank-page issue
+       is diagnosed. Tap the floating circle button to see console errors,
+       network requests, etc. directly on this device. -->
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
