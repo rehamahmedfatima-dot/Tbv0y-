@@ -24,7 +24,8 @@ dependencies:
   # Firebase — push notifications only (auth is Supabase Auth)
   firebase_core: any
   firebase_messaging: any
-  flutter_local_notifications: any
+  # Pinned — newer major versions changed show() to use named parameters.
+  flutter_local_notifications: ^17.2.2
 
   # Native OAuth flows used together with Supabase Auth
   # Pinned (not "any") — v7+ of google_sign_in rewrote its API
@@ -63,7 +64,8 @@ dependencies:
   # Data export (Settings → Export)
   share_plus: any
   pdf: any
-  csv: any
+  # Pinned — newer major versions renamed the converter classes.
+  csv: ^6.0.0
 
   cupertino_icons: any
 
