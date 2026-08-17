@@ -76,7 +76,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # No custom asset folders yet — add entries here (and create the actual
-  # folders) once you have real images/icons/fonts to bundle, e.g.:
-  # assets:
-  #   - assets/images/
+  assets:
+    - .env
