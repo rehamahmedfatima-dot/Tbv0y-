@@ -10,9 +10,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 import '../../../core/network/backend_api_client.dart';
 import '../../../core/network/supabase_service.dart';
-import 'app_user.dart';
-import 'auth_exceptions.dart';
-import 'auth_repository.dart';
+import '../domain/app_user.dart';
+import '../domain/auth_exceptions.dart';
+import '../domain/auth_repository.dart';
 
 class SupabaseAuthRepository implements AuthRepository {
   final sb.SupabaseClient _client = SupabaseService.client;
