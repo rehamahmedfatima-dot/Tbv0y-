@@ -1,3 +1,5 @@
+import '../../../core/config/env_config.dart';
+
 class AuthException implements Exception {
   final String message;
   final String? code;
@@ -37,9 +39,13 @@ class AuthExceptionMapper {
       return AuthException('Invalid verification code. [debug: $error]', code: 'invalid_otp');
     }
 
-    // TEMPORARY — showing the raw error for every other case so we can
-    // diagnose the actual Supabase message instead of guessing. Revert
-    // this branch to a generic "Something went wrong." once confirmed.
-    return AuthException('Unmapped error: $error', code: 'unknown');
+    // TEMPORARY — showing the raw error AND the actual compiled-in
+    // Supabase URL, so we can see exactly what value made it into this
+    // build (GitHub never shows secret values back, so this is the only
+    // way to confirm it landed correctly).
+    return AuthException(
+      'Unmapped error: $error [SUPABASE_URL used: ${EnvConfig.supabaseUrl}]',
+      code: 'unknown',
+    );
   }
 }
