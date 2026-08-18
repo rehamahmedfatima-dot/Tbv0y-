@@ -27,20 +27,49 @@ import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/skills/presentation/screens/skills_screen.dart';
 import '../../features/time_machine/presentation/screens/time_machine_screen.dart';
+import '../network/supabase_service.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
 
   return GoRouter(
     initialLocation: '/login',
-    redirect: (context, state) {
+    redirect: (context, state) async {
       final loggedIn = authState.valueOrNull != null;
       final loggingIn = state.matchedLocation == '/login' ||
           state.matchedLocation == '/signup' ||
           state.matchedLocation == '/forgot-password';
+      final onOnboarding = state.matchedLocation == '/onboarding';
 
-      if (!loggedIn && !loggingIn) return '/login';
-      if (loggedIn && loggingIn) return '/home';
+      if (!loggedIn) {
+        return loggingIn ? null : '/login';
+      }
+
+      // Logged in from here on. Check onboarding completion straight from
+      // the database (not local state) so a fresh sign-up can't race past
+      // it into a Home screen that has no data yet — this is what caused
+      // the "could not load dashboard" error right after signing up.
+      bool onboardingCompleted;
+      try {
+        final profile = await SupabaseService.client
+            .from('user_profiles')
+            .select('onboarding_completed')
+            .eq('user_id', authState.value!.id)
+            .maybeSingle();
+        onboardingCompleted = profile?['onboarding_completed'] == true;
+      } catch (_) {
+        // If the check itself fails (e.g. transient network issue), don't
+        // block navigation — fail open rather than stranding the user.
+        return null;
+      }
+
+      if (!onboardingCompleted) {
+        return onOnboarding ? null : '/onboarding';
+      }
+
+      // Onboarding is done — bounce away from login/signup/onboarding
+      // toward Home; otherwise let the requested route through.
+      if (loggingIn || onOnboarding) return '/home';
       return null;
     },
     routes: [
@@ -56,14 +85,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/goals', builder: (context, state) => const GoalsScreen()),
       GoRoute(path: '/focus', builder: (context, state) => const FocusModeScreen()),
       GoRoute(path: '/achievements', builder: (context, state) => const AchievementsScreen()),
+      GoRoute(path: '/books', builder: (context, state) => const BooksScreen()),
       GoRoute(path: '/challenges', builder: (context, state) => const ChallengesScreen()),
       GoRoute(path: '/legacy', builder: (context, state) => const LegacyScreen()),
-      GoRoute(path: '/time-machine', builder: (context, state) => const TimeMachineScreen()),
+      GoRoute(path: '/letters', builder: (context, state) => const LettersScreen()),
       GoRoute(path: '/my-journey', builder: (context, state) => const MyJourneyScreen()),
       GoRoute(path: '/my-story', builder: (context, state) => const MyStoryScreen()),
-      GoRoute(path: '/books', builder: (context, state) => const BooksScreen()),
       GoRoute(path: '/skills', builder: (context, state) => const SkillsScreen()),
-      GoRoute(path: '/letters', builder: (context, state) => const LettersScreen()),
+      GoRoute(path: '/time-machine', builder: (context, state) => const TimeMachineScreen()),
       GoRoute(path: '/habits', builder: (context, state) => const HabitsListScreen()),
       GoRoute(path: '/habits/add', builder: (context, state) => const AddEditHabitScreen()),
       GoRoute(
@@ -74,7 +103,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final habits = ref.watch(habitsProvider).valueOrNull ?? [];
               final habit = habits.where((h) => h.id == state.pathParameters['id']).firstOrNull;
               if (habit == null) {
-                // Data not loaded yet (e.g. deep link) — fall back to the list.
                 return const HabitsListScreen();
               }
               return HabitDetailScreen(habit: habit);
