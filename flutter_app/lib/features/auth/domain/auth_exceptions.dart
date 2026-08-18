@@ -8,37 +8,38 @@ class AuthException implements Exception {
 }
 
 /// Maps raw Supabase/Google/Apple errors to safe, user-facing messages.
-/// Never surface raw provider error strings to the UI — they can leak
-/// implementation details or be inconsistent between providers.
 class AuthExceptionMapper {
   static AuthException map(Object error) {
     final raw = error.toString().toLowerCase();
 
     if (raw.contains('invalid login credentials') || raw.contains('invalid_credentials')) {
-      return const AuthException('Incorrect email or password.', code: 'invalid_credentials');
+      return AuthException('Incorrect email or password. [debug: $error]', code: 'invalid_credentials');
     }
     if (raw.contains('user already registered') || raw.contains('already exists')) {
-      return const AuthException('An account with this email already exists.', code: 'user_exists');
+      return AuthException('An account with this email already exists. [debug: $error]', code: 'user_exists');
     }
     if (raw.contains('email not confirmed')) {
-      return const AuthException('Please verify your email before signing in.', code: 'email_unconfirmed');
+      return AuthException('Please verify your email before signing in. [debug: $error]', code: 'email_unconfirmed');
     }
     if (raw.contains('weak_password') || raw.contains('password should be at least')) {
-      return const AuthException('Password must be at least 8 characters.', code: 'weak_password');
+      return AuthException('Password must be at least 8 characters. [debug: $error]', code: 'weak_password');
     }
     if (raw.contains('network') || raw.contains('socket')) {
-      return const AuthException('Network error. Check your connection and try again.', code: 'network_error');
+      return AuthException('Network error. Check your connection and try again. [debug: $error]', code: 'network_error');
     }
     if (raw.contains('cancel')) {
-      return const AuthException('Sign-in was cancelled.', code: 'cancelled');
+      return AuthException('Sign-in was cancelled. [debug: $error]', code: 'cancelled');
     }
     if (raw.contains('otp') && raw.contains('expired')) {
-      return const AuthException('This code has expired. Request a new one.', code: 'otp_expired');
+      return AuthException('This code has expired. Request a new one. [debug: $error]', code: 'otp_expired');
     }
-    if (raw.contains('otp') || raw.contains('token')) {
-      return const AuthException('Invalid verification code.', code: 'invalid_otp');
+    if (raw.contains('otp')) {
+      return AuthException('Invalid verification code. [debug: $error]', code: 'invalid_otp');
     }
 
-    return const AuthException('Something went wrong. Please try again.', code: 'unknown');
+    // TEMPORARY — showing the raw error for every other case so we can
+    // diagnose the actual Supabase message instead of guessing. Revert
+    // this branch to a generic "Something went wrong." once confirmed.
+    return AuthException('Unmapped error: $error', code: 'unknown');
   }
 }
