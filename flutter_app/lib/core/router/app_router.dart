@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/achievements/presentation/screens/achievements_screen.dart';
 import '../../features/ai_coach/presentation/screens/ai_coach_screen.dart';
-import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
@@ -29,13 +29,39 @@ import '../../features/skills/presentation/screens/skills_screen.dart';
 import '../../features/time_machine/presentation/screens/time_machine_screen.dart';
 import '../network/supabase_service.dart';
 
+/// Bridges a Stream to GoRouter's `refreshListenable` so GoRouter can
+/// re-run its `redirect` callback whenever auth state changes — WITHOUT
+/// the whole GoRouter object being torn down and rebuilt. Rebuilding
+/// GoRouter itself (e.g. via `ref.watch` inside the provider) resets its
+/// internal navigation stack, which is what was bouncing users back to
+/// /login right after a successful sign-in/sign-up.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final refreshListenable = GoRouterRefreshStream(SupabaseService.auth.onAuthStateChange);
+  ref.onDispose(refreshListenable.dispose);
 
   return GoRouter(
     initialLocation: '/login',
+    refreshListenable: refreshListenable,
     redirect: (context, state) async {
-      final loggedIn = authState.valueOrNull != null;
+      // Read auth state fresh from Supabase directly (not from a Riverpod
+      // snapshot) so this always reflects the true current session,
+      // regardless of provider rebuild timing.
+      final loggedIn = SupabaseService.currentUser != null;
       final loggingIn = state.matchedLocation == '/login' ||
           state.matchedLocation == '/signup' ||
           state.matchedLocation == '/forgot-password';
@@ -46,29 +72,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // Logged in from here on. Check onboarding completion straight from
-      // the database (not local state) so a fresh sign-up can't race past
-      // it into a Home screen that has no data yet — this is what caused
-      // the "could not load dashboard" error right after signing up.
+      // the database so a fresh sign-up can't land on a Home screen that
+      // has no data yet.
       bool onboardingCompleted;
       try {
         final profile = await SupabaseService.client
             .from('user_profiles')
             .select('onboarding_completed')
-            .eq('user_id', authState.value!.id)
+            .eq('user_id', SupabaseService.currentUser!.id)
             .maybeSingle();
         onboardingCompleted = profile?['onboarding_completed'] == true;
       } catch (_) {
-        // If the check itself fails (e.g. transient network issue), don't
-        // block navigation — fail open rather than stranding the user.
-        return null;
+        return null; // fail open rather than stranding the user
       }
 
       if (!onboardingCompleted) {
         return onOnboarding ? null : '/onboarding';
       }
 
-      // Onboarding is done — bounce away from login/signup/onboarding
-      // toward Home; otherwise let the requested route through.
       if (loggingIn || onOnboarding) return '/home';
       return null;
     },
