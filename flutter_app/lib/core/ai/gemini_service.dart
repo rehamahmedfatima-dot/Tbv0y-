@@ -2,15 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' show Content, TextPart;
 import '../config/env_config.dart';
 
-/// Talks to the Gemini API directly over HTTP (via Dio) instead of the
-/// `google_generative_ai` package. That package has been officially
-/// deprecated by Google — its GitHub repo is now archived as
-/// "deprecated-generative-ai-dart" — and its generateContent() calls
-/// return 404 even for currently-available models. Calling the REST
-/// endpoint directly avoids that broken layer entirely. `Content` is
-/// still imported from the old package purely as a plain data holder
-/// (role + text) for compatibility with existing call sites like the AI
-/// Coach chat screen — no network code from that package is used.
+/// Service for directly communicating with Gemini REST API endpoints via Dio.
 class GeminiService {
   static const _modelName = 'gemini-2.5-flash';
   static const _baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
@@ -47,24 +39,31 @@ class GeminiService {
       ],
     };
 
-    final response = await _dio.post(
-      '$_baseUrl/models/$_modelName:generateContent',
-      data: body,
-      options: Options(headers: {
-        'Content-Type': 'application/json',
-        // Newer AI Studio keys (the "AQ." prefixed Authorization-key
-        // format) must be sent as this header, not as a `?key=` query
-        // parameter — sending it as a query param is what was producing
-        // the 404s.
-        'x-goog-api-key': EnvConfig.geminiApiKey,
-      }),
-    );
+    try {
+      // Pass the API key as a query parameter in the URL.
+      // This is required for standard REST endpoints in Google AI Studio to avoid 404 errors.
+      final url = '$_baseUrl/models/$_modelName:generateContent?key=${EnvConfig.geminiApiKey}';
 
-    final candidates = response.data['candidates'] as List<dynamic>?;
-    if (candidates == null || candidates.isEmpty) return '';
-    final parts = candidates[0]['content']?['parts'] as List<dynamic>?;
-    if (parts == null || parts.isEmpty) return '';
-    return (parts[0]['text'] as String?)?.trim() ?? '';
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      final candidates = response.data['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) return '';
+      final parts = candidates[0]['content']?['parts'] as List<dynamic>?;
+      if (parts == null || parts.isEmpty) return '';
+      return (parts[0]['text'] as String?)?.trim() ?? '';
+    } on DioException catch (e) {
+      print('Gemini API Error Status: ${e.response?.statusCode}');
+      print('Gemini API Error Detail: ${e.response?.data}');
+      rethrow;
+    }
   }
 
   /// One-off prompt → plain text response.
