@@ -1,4 +1,25 @@
-Future<String> _post({
+import 'package:dio/dio.dart';
+import 'package:google_generative_ai/google_generative_ai.dart' show Content, TextPart;
+import '../config/env_config.dart';
+
+/// Talks to the Gemini API directly over HTTP (via Dio) instead of the
+/// `google_generative_ai` package. That package has been officially
+/// deprecated by Google — its GitHub repo is now archived as
+/// "deprecated-generative-ai-dart" — and its generateContent() calls
+/// return 404 even for currently-available models. Calling the REST
+/// endpoint directly avoids that broken layer entirely. `Content` is
+/// still imported from the old package purely as a plain data holder
+/// (role + text) for compatibility with existing call sites like the AI
+/// Coach chat screen — no network code from that package is used.
+class GeminiService {
+  static const _modelName = 'gemini-2.5-flash';
+  static const _baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+
+  GeminiService._internal() : _dio = Dio();
+  static final GeminiService instance = GeminiService._internal();
+  final Dio _dio;
+
+  Future<String> _post({
     required List<Map<String, dynamic>> contents,
     String? systemInstruction,
     double temperature = 0.8,
@@ -26,29 +47,104 @@ Future<String> _post({
       ],
     };
 
-    try {
-      // تعديل الرابط ليتوافق مع v1beta وبادئة النموذج
-      final url = '$_baseUrl/models/gemini-1.5-flash:generateContent';
+    final response = await _dio.post(
+      '$_baseUrl/models/$_modelName:generateContent',
+      data: body,
+      options: Options(headers: {
+        'Content-Type': 'application/json',
+        // Newer AI Studio keys (the "AQ." prefixed Authorization-key
+        // format) must be sent as this header, not as a `?key=` query
+        // parameter — sending it as a query param is what was producing
+        // the 404s.
+        'x-goog-api-key': EnvConfig.geminiApiKey,
+      }),
+    );
 
-      final response = await _dio.post(
-        url,
-        data: body,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': EnvConfig.geminiApiKey,
-          },
-        ),
-      );
+    final candidates = response.data['candidates'] as List<dynamic>?;
+    if (candidates == null || candidates.isEmpty) return '';
+    final parts = candidates[0]['content']?['parts'] as List<dynamic>?;
+    if (parts == null || parts.isEmpty) return '';
+    return (parts[0]['text'] as String?)?.trim() ?? '';
+  }
 
-      final candidates = response.data['candidates'] as List<dynamic>?;
-      if (candidates == null || candidates.isEmpty) return '';
-      final parts = candidates[0]['content']?['parts'] as List<dynamic>?;
-      if (parts == null || parts.isEmpty) return '';
-      return (parts[0]['text'] as String?)?.trim() ?? '';
-    } on DioException catch (e) {
-      print('Gemini API Error Status: ${e.response?.statusCode}');
-      print('Gemini API Response: ${e.response?.data}');
-      rethrow;
-    }
+  /// One-off prompt → plain text response.
+  Future<String> generateText(String prompt, {String? systemInstruction}) {
+    return _post(
+      contents: [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': prompt}
+          ]
+        }
+      ],
+      systemInstruction: systemInstruction,
+    );
+  }
+
+  /// Prompt → parsed JSON string. Used for AI missions, goal roadmaps,
+  /// identity → habit conversion, and story reports.
+  Future<String> generateJson(String prompt) {
+    return _post(
+      contents: [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': prompt}
+          ]
+        }
+      ],
+      temperature: 0.4,
+      maxOutputTokens: 2048,
+      responseMimeType: 'application/json',
+    );
+  }
+
+  /// Multi-turn chat session for the AI Coach conversation screen.
+  ChatSession startChat({List<Content>? history, String? systemInstruction}) {
+    return ChatSession._(
+      service: this,
+      systemInstruction: systemInstruction,
+      history: history ?? [],
+    );
+  }
+}
+
+/// Drop-in replacement for google_generative_ai's ChatSession — keeps its
+/// own turn history and calls GeminiService for each new message.
+class ChatSession {
+  ChatSession._({required this.service, this.systemInstruction, required this.history});
+
+  final GeminiService service;
+  final String? systemInstruction;
+  final List<Content> history;
+
+  Future<GenerateContentResponse> sendMessage(Content message) async {
+    history.add(message);
+
+    final contents = history
+        .map((c) => {
+              'role': c.role == 'model' ? 'model' : 'user',
+              'parts': c.parts
+                  .whereType<TextPart>()
+                  .map((p) => {'text': p.text})
+                  .toList(),
+            })
+        .toList();
+
+    final text = await service._post(
+      contents: contents,
+      systemInstruction: systemInstruction,
+    );
+
+    history.add(Content.model([TextPart(text)]));
+    return GenerateContentResponse(text);
+  }
+}
+
+/// Minimal stand-in for the SDK's response type — exposes just `.text`,
+/// which is all existing call sites use.
+class GenerateContentResponse {
+  const GenerateContentResponse(this.text);
+  final String? text;
 }
