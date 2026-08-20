@@ -2,9 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' show Content, TextPart;
 import '../config/env_config.dart';
 
-/// Service for directly communicating with Gemini REST API endpoints via Dio.
 class GeminiService {
-  static const _modelName = 'gemini-2.5-flash';
+  // تم اعتماد نموذج متوافق تماماً مع كافة أنواع المفاتيح الجديدة
+  static const _modelName = 'gemini-1.5-flash';
   static const _baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
 
   GeminiService._internal() : _dio = Dio();
@@ -40,9 +40,8 @@ class GeminiService {
     };
 
     try {
-      // Pass the API key as a query parameter in the URL.
-      // This is required for standard REST endpoints in Google AI Studio to avoid 404 errors.
-      final url = '$_baseUrl/models/$_modelName:generateContent?key=${EnvConfig.geminiApiKey}';
+      // إرسال الطلب إلى نقطة النهاية بدون ضم المفتاح للـ URL
+      final url = '$_baseUrl/models/$_modelName:generateContent';
 
       final response = await _dio.post(
         url,
@@ -50,6 +49,8 @@ class GeminiService {
         options: Options(
           headers: {
             'Content-Type': 'application/json',
+            // إرسال مفتاح AQ. المخصص في الـ Header لمنع خطأ 404
+            'x-goog-api-key': EnvConfig.geminiApiKey,
           },
         ),
       );
@@ -61,7 +62,7 @@ class GeminiService {
       return (parts[0]['text'] as String?)?.trim() ?? '';
     } on DioException catch (e) {
       print('Gemini API Error Status: ${e.response?.statusCode}');
-      print('Gemini API Error Detail: ${e.response?.data}');
+      print('Gemini API Response: ${e.response?.data}');
       rethrow;
     }
   }
@@ -81,8 +82,7 @@ class GeminiService {
     );
   }
 
-  /// Prompt → parsed JSON string. Used for AI missions, goal roadmaps,
-  /// identity → habit conversion, and story reports.
+  /// Prompt → parsed JSON string.
   Future<String> generateJson(String prompt) {
     return _post(
       contents: [
@@ -109,8 +109,6 @@ class GeminiService {
   }
 }
 
-/// Drop-in replacement for google_generative_ai's ChatSession — keeps its
-/// own turn history and calls GeminiService for each new message.
 class ChatSession {
   ChatSession._({required this.service, this.systemInstruction, required this.history});
 
@@ -141,8 +139,6 @@ class ChatSession {
   }
 }
 
-/// Minimal stand-in for the SDK's response type — exposes just `.text`,
-/// which is all existing call sites use.
 class GenerateContentResponse {
   const GenerateContentResponse(this.text);
   final String? text;
