@@ -1,4 +1,6 @@
+```dart
 import 'dart:convert';
+
 import '../../../core/ai/gemini_service.dart';
 import '../../../core/network/supabase_service.dart';
 import '../domain/onboarding_data.dart';
@@ -15,7 +17,7 @@ You are the onboarding analyst for TBVOY, a personal growth app. Based on the
 user's answers below, suggest 3 identities they could become ("Who do you
 want to become" — not vague goals, concrete identities like "Disciplined
 Athlete" or "Consistent Reader"), each with 2-3 small, realistic starter
-habits that build that identity.
+habits.
 
 User answers:
 - Current habits: ${data.currentHabits.join(', ')}
@@ -46,28 +48,50 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
 }
 ''';
 
-    final raw = await _ai.generateJson(prompt);
+    // Keep onboarding working even if Gemini is unavailable.
     try {
+      final raw = await _ai.generateJson(prompt);
+
       final parsed = jsonDecode(raw) as Map<String, dynamic>;
       final list = (parsed['identities'] as List<dynamic>? ?? []);
-      return list
+
+      final identities = list
           .map((e) => SuggestedIdentity.fromJson(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
-      // AI returned malformed JSON — fail soft with a safe default rather
-      // than blocking onboarding completion.
-      return const [
-        SuggestedIdentity(
-          title: 'Consistent Beginner',
-          description: 'Start small, show up daily, build momentum.',
-          icon: 'trending-up',
-          habits: [
-            SuggestedHabit(title: 'Write one journal line', category: 'custom', frequencyType: 'daily'),
-            SuggestedHabit(title: 'Take a 10-minute walk', category: 'health', frequencyType: 'daily'),
-          ],
-        ),
-      ];
+
+      // If Gemini returned an empty list, use the safe default as well.
+      if (identities.isEmpty) {
+        return _defaultIdentity();
+      }
+
+      return identities;
+    } catch (e) {
+      // AI failed, returned malformed JSON, or returned an unexpected format.
+      // Do not block onboarding completion.
+      return _defaultIdentity();
     }
+  }
+
+  List<SuggestedIdentity> _defaultIdentity() {
+    return const [
+      SuggestedIdentity(
+        title: 'Consistent Beginner',
+        description: 'Start small, show up daily, build momentum.',
+        icon: 'trending-up',
+        habits: [
+          SuggestedHabit(
+            title: 'Write one journal line',
+            category: 'custom',
+            frequencyType: 'daily',
+          ),
+          SuggestedHabit(
+            title: 'Take a 10-minute walk',
+            category: 'health',
+            frequencyType: 'daily',
+          ),
+        ],
+      ),
+    ];
   }
 
   @override
@@ -76,8 +100,11 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
     required List<SuggestedIdentity> chosenIdentities,
   }) async {
     final userId = SupabaseService.currentUser?.id;
+
     if (userId == null) {
-      throw StateError('Cannot complete onboarding without an authenticated user.');
+      throw StateError(
+        'Cannot complete onboarding without an authenticated user.',
+      );
     }
 
     // 1. Profile + raw onboarding answers
@@ -95,7 +122,10 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
     });
 
     if (data.name != null) {
-      await _client.from('users').update({'display_name': data.name}).eq('id', userId);
+      await _client
+          .from('users')
+          .update({'display_name': data.name})
+          .eq('id', userId);
     }
 
     // 2. Notification preferences
@@ -103,8 +133,9 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       await _client.from('user_settings').upsert({
         'user_id': userId,
         'morning_mission_time': data.notificationTimes.first,
-        'daily_checkin_time':
-            data.notificationTimes.length > 1 ? data.notificationTimes[1] : '20:00:00',
+        'daily_checkin_time': data.notificationTimes.length > 1
+            ? data.notificationTimes[1]
+            : '20:00:00',
       });
     }
 
@@ -119,7 +150,10 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
     }
 
     // 4. Identities + their starter habits, from what the user confirmed
-    final categories = await _client.from('habit_categories').select('id, key');
+    final categories = await _client
+        .from('habit_categories')
+        .select('id, key');
+
     final categoryIdByKey = {
       for (final c in categories) c['key'] as String: c['id'] as String,
     };
@@ -139,7 +173,9 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       final identityId = identityRow['id'] as String;
 
       for (final habit in identity.habits) {
-        final categoryId = categoryIdByKey[habit.category] ?? categoryIdByKey['custom'];
+        final categoryId =
+            categoryIdByKey[habit.category] ?? categoryIdByKey['custom'];
+
         await _client.from('habits').insert({
           'user_id': userId,
           'identity_id': identityId,
@@ -159,8 +195,16 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       'user_id': userId,
       'tree_stage': 1,
       'health': 100,
-      'last_activity_date': DateTime.now().toIso8601String().split('T').first,
+      'last_activity_date':
+          DateTime.now().toIso8601String().split('T').first,
     });
-    await _client.from('user_levels').upsert({'user_id': userId, 'xp': 0, 'level': 1});
+
+    await _client.from('user_levels').upsert({
+      'user_id': userId,
+      'xp': 0,
+      'level': 1,
+    });
   }
 }
+```
+
