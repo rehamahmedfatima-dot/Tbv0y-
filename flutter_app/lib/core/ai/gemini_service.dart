@@ -5,10 +5,15 @@ import '../config/env_config.dart';
 /// (AI Coach, journal summaries, daily missions, future-self letters,
 /// annual "Story of Your Best Version" reports) goes through this service
 /// so model choice, safety settings, and error handling live in one place.
+///
+/// Model note: gemini-2.0-flash was retired by Google on 2026-06-01 —
+/// gemini-2.5-flash is the current equivalent replacement.
 class GeminiService {
+  static const _modelName = 'gemini-2.5-flash';
+
   GeminiService._internal()
       : _chatModel = GenerativeModel(
-          model: 'gemini-2.0-flash',
+          model: _modelName,
           apiKey: EnvConfig.geminiApiKey,
           generationConfig: GenerationConfig(
             temperature: 0.8,
@@ -22,7 +27,7 @@ class GeminiService {
           ],
         ),
         _jsonModel = GenerativeModel(
-          model: 'gemini-2.0-flash',
+          model: _modelName,
           apiKey: EnvConfig.geminiApiKey,
           generationConfig: GenerationConfig(
             temperature: 0.4,
@@ -42,7 +47,7 @@ class GeminiService {
     final model = systemInstruction == null
         ? _chatModel
         : GenerativeModel(
-            model: 'gemini-2.0-flash',
+            model: _modelName,
             apiKey: EnvConfig.geminiApiKey,
             systemInstruction: Content.system(systemInstruction),
           );
@@ -62,7 +67,7 @@ class GeminiService {
   /// manually each call.
   ChatSession startChat({List<Content>? history, String? systemInstruction}) {
     final model = GenerativeModel(
-      model: 'gemini-2.0-flash',
+      model: _modelName,
       apiKey: EnvConfig.geminiApiKey,
       systemInstruction: systemInstruction != null ? Content.system(systemInstruction) : null,
       generationConfig: GenerationConfig(temperature: 0.8, maxOutputTokens: 1024),
