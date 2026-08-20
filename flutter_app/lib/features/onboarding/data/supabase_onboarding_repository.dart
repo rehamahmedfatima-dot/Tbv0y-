@@ -1,4 +1,3 @@
-```dart
 import 'dart:convert';
 
 import '../../../core/ai/gemini_service.dart';
@@ -11,7 +10,9 @@ class SupabaseOnboardingRepository implements OnboardingRepository {
   final _ai = GeminiService.instance;
 
   @override
-  Future<List<SuggestedIdentity>> analyzeWithAI(OnboardingData data) async {
+  Future<List<SuggestedIdentity>> analyzeWithAI(
+    OnboardingData data,
+  ) async {
     final prompt = '''
 You are the onboarding analyst for TBVOY, a personal growth app. Based on the
 user's answers below, suggest 3 identities they could become ("Who do you
@@ -48,26 +49,26 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
 }
 ''';
 
-    // Keep onboarding working even if Gemini is unavailable.
     try {
       final raw = await _ai.generateJson(prompt);
 
       final parsed = jsonDecode(raw) as Map<String, dynamic>;
-      final list = (parsed['identities'] as List<dynamic>? ?? []);
+      final list = parsed['identities'] as List<dynamic>? ?? [];
 
       final identities = list
-          .map((e) => SuggestedIdentity.fromJson(e as Map<String, dynamic>))
+          .map(
+            (e) => SuggestedIdentity.fromJson(
+              e as Map<String, dynamic>,
+            ),
+          )
           .toList();
 
-      // If Gemini returned an empty list, use the safe default as well.
       if (identities.isEmpty) {
         return _defaultIdentity();
       }
 
       return identities;
     } catch (e) {
-      // AI failed, returned malformed JSON, or returned an unexpected format.
-      // Do not block onboarding completion.
       return _defaultIdentity();
     }
   }
@@ -107,7 +108,6 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       );
     }
 
-    // 1. Profile + raw onboarding answers
     await _client.from('user_profiles').upsert({
       'user_id': userId,
       'age': data.age,
@@ -128,7 +128,6 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
           .eq('id', userId);
     }
 
-    // 2. Notification preferences
     if (data.notificationTimes.isNotEmpty) {
       await _client.from('user_settings').upsert({
         'user_id': userId,
@@ -139,7 +138,6 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       });
     }
 
-    // 3. Life areas (Wheel of Life) from stated priorities
     for (final entry in data.lifePriorities.entries) {
       await _client.from('life_areas').upsert({
         'user_id': userId,
@@ -149,13 +147,13 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       }, onConflict: 'user_id,area_key');
     }
 
-    // 4. Identities + their starter habits, from what the user confirmed
     final categories = await _client
         .from('habit_categories')
         .select('id, key');
 
     final categoryIdByKey = {
-      for (final c in categories) c['key'] as String: c['id'] as String,
+      for (final c in categories)
+        c['key'] as String: c['id'] as String,
     };
 
     for (final identity in chosenIdentities) {
@@ -174,7 +172,8 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
 
       for (final habit in identity.habits) {
         final categoryId =
-            categoryIdByKey[habit.category] ?? categoryIdByKey['custom'];
+            categoryIdByKey[habit.category] ??
+            categoryIdByKey['custom'];
 
         await _client.from('habits').insert({
           'user_id': userId,
@@ -190,7 +189,6 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
       }
     }
 
-    // 5. Initialize growth tree + level so home screen has data on first load
     await _client.from('growth_tree_state').upsert({
       'user_id': userId,
       'tree_stage': 1,
@@ -206,5 +204,3 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
     });
   }
 }
-```
-
