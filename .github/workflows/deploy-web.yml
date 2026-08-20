@@ -27,6 +27,18 @@ jobs:
         with:
           channel: "stable"
 
+      # Secrets come from Settings → Secrets and variables → Actions in
+      # your GitHub repo — never commit real values into this file.
+      - name: Create .env from secrets
+        run: |
+          cd flutter_app
+          cat > .env << EOF
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          BACKEND_API_URL=${{ secrets.BACKEND_API_URL }}
+          EOF
+
       - name: Install dependencies
         run: cd flutter_app && flutter pub get
 
@@ -34,19 +46,7 @@ jobs:
         run: cd flutter_app && flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build web
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
-        run: |
-          cd flutter_app
-          flutter build web --release \
-            --base-href /${{ github.event.repository.name }}/ \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY \
-            --dart-define=BACKEND_API_URL=$BACKEND_API_URL
+        run: cd flutter_app && flutter build web --release --base-href /${{ github.event.repository.name }}/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
