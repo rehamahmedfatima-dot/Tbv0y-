@@ -49,9 +49,15 @@ class GeminiService {
 
     final response = await _dio.post(
       '$_baseUrl/models/$_modelName:generateContent',
-      queryParameters: {'key': EnvConfig.geminiApiKey},
       data: body,
-      options: Options(headers: {'Content-Type': 'application/json'}),
+      options: Options(headers: {
+        'Content-Type': 'application/json',
+        // Newer AI Studio keys (the "AQ." prefixed Authorization-key
+        // format) must be sent as this header, not as a `?key=` query
+        // parameter — sending it as a query param is what was producing
+        // the 404s.
+        'x-goog-api-key': EnvConfig.geminiApiKey,
+      }),
     );
 
     final candidates = response.data['candidates'] as List<dynamic>?;
