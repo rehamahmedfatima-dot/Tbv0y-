@@ -1,18 +1,14 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 
-/// Wraps Supabase initialization so the rest of the app just calls
-/// `SupabaseService.client` without worrying about setup order.
 class SupabaseService {
   SupabaseService._();
 
   static bool _initialized = false;
   static Future<void>? _initializationFuture;
 
-  /// Initializes Supabase exactly once.
-  ///
-  /// A timeout prevents the application startup from waiting indefinitely
-  /// if the Supabase initialization gets stuck.
   static Future<void> initialize() {
     if (_initialized) {
       return Future.value();
@@ -40,7 +36,6 @@ class SupabaseService {
 
       _initialized = true;
     } catch (_) {
-      // Allow a future retry if initialization failed.
       _initializationFuture = null;
       rethrow;
     }
