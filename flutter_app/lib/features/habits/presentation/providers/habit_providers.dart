@@ -159,6 +159,18 @@ class HabitsNotifier extends StateNotifier<AsyncValue<List<Habit>>> {
     await refresh();
   }
 
+  Future<void> toggleToday(String habitId) async {
+    final current = state.valueOrNull ?? [];
+    final habit = current.where((h) => h.id == habitId).firstOrNull;
+    final newState = !(habit?.completedToday ?? false);
+    await toggleCompletion(habitId, newState);
+  }
+
+  Future<void> archive(String habitId) async {
+    await _client.from('habits').update({'is_active': false}).eq('id', habitId);
+    await refresh();
+  }
+
   Future<void> delete(String habitId) async {
     await _client.from('habits').update({'is_active': false}).eq('id', habitId);
     await refresh();
@@ -168,3 +180,10 @@ class HabitsNotifier extends StateNotifier<AsyncValue<List<Habit>>> {
 final habitsProvider = StateNotifierProvider<HabitsNotifier, AsyncValue<List<Habit>>>(
   (ref) => HabitsNotifier(),
 );
+
+/// Habits not yet completed today — used by the Home dashboard's
+/// "Upcoming habits" section.
+final todayPendingHabitsProvider = Provider<List<Habit>>((ref) {
+  final habits = ref.watch(habitsProvider).valueOrNull ?? [];
+  return habits.where((h) => !h.completedToday).toList();
+});
