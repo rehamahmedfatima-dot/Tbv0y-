@@ -1,59 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../onboarding/presentation/widgets/onboarding_widgets.dart' show MultiSelectChip;
+import '../../domain/habit.dart';
 import '../providers/habit_providers.dart';
-import '../widgets/habit_visuals.dart';
+
+const _kCategoryOptions = [
+  ('health', 'Health', Icons.favorite_border_rounded),
+  ('fitness', 'Fitness', Icons.fitness_center_rounded),
+  ('reading', 'Reading', Icons.menu_book_outlined),
+  ('learning', 'Learning', Icons.school_outlined),
+  ('work', 'Work', Icons.work_outline_rounded),
+  ('prayer', 'Prayer', Icons.self_improvement_rounded),
+  ('meditation', 'Meditation', Icons.spa_outlined),
+  ('finance', 'Finance', Icons.savings_outlined),
+  ('relationships', 'Relationships', Icons.people_outline_rounded),
+  ('custom', 'Custom', Icons.star_outline_rounded),
+];
+
+const _kColorOptions = [
+  AppColors.primary,
+  AppColors.secondary,
+  AppColors.accent,
+  AppColors.success,
+  AppColors.danger,
+];
 
 class AddEditHabitScreen extends ConsumerStatefulWidget {
-  const AddEditHabitScreen({super.key});
+  final Habit? habit; // null = create mode
+  const AddEditHabitScreen({super.key, this.habit});
 
   @override
   ConsumerState<AddEditHabitScreen> createState() => _AddEditHabitScreenState();
 }
 
 class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  String? _categoryKey;
-  String _icon = 'star';
-  String _color = '#2563EB';
-  String _frequencyType = 'daily';
+  final _formKey = GlobalKey<FormState>();
+  late final _titleController = TextEditingController(text: widget.habit?.title ?? '');
+  late final _descController = TextEditingController(text: widget.habit?.description ?? '');
+
+  // Defensive defaults — always have a valid selection so save can never
+  // silently fail on a null value that the form itself doesn't validate.
+  late String _categoryKey = widget.habit?.categoryKey ?? _kCategoryOptions.first.$1;
+  late Color _color = widget.habit?.color ?? _kColorOptions.first;
+  late HabitFrequencyType _frequencyType = widget.habit?.frequencyType ?? HabitFrequencyType.daily;
+  late HabitPriority _priority = widget.habit?.priority ?? HabitPriority.medium;
   int _timesPerWeek = 3;
-  String _priority = 'medium';
-  final List<TimeOfDay> _reminders = [];
+
   bool _saving = false;
 
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
+    _descController.dispose();
     super.dispose();
   }
 
-  bool get _canSave => _titleController.text.trim().isNotEmpty && _categoryKey != null;
-
   Future<void> _save() async {
-    if (!_canSave) return;
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _saving = true);
     try {
-      await ref.read(habitsProvider.notifier).addHabit(
-            title: _titleController.text.trim(),
-            description:
-                _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-            categoryKey: _categoryKey!,
-            icon: _icon,
-            color: _color,
-            frequencyType: _frequencyType,
-            frequencyConfig: _frequencyType == 'x_times_per_week' ? {'times_per_week': _timesPerWeek} : {},
-            reminderTimes: _reminders
-                .map((t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}')
-                .toList(),
-            priority: _priority,
-          );
+      final notifier = ref.read(habitsProvider.notifier);
+      if (widget.habit == null) {
+        await notifier.create(
+          title: _titleController.text.trim(),
+          description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+          categoryKey: _categoryKey,
+          color: _color,
+          frequencyType: _frequencyType,
+          timesPerWeek: _frequencyType == HabitFrequencyType.xTimesPerWeek ? _timesPerWeek : null,
+          priority: _priority,
+        );
+      } else {
+        await notifier.update(
+          habitId: widget.habit!.id,
+          title: _titleController.text.trim(),
+          description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+          categoryKey: _categoryKey,
+          color: _color,
+          frequencyType: _frequencyType,
+          timesPerWeek: _frequencyType == HabitFrequencyType.xTimesPerWeek ? _timesPerWeek : null,
+          priority: _priority,
+        );
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
+      // Never fail silently — show exactly what went wrong so this never
+      // needs another round of guessing.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not save habit: $e'), backgroundColor: AppColors.danger),
@@ -66,202 +101,135 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categoriesAsync = ref.watch(habitCategoriesProvider);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Habit'),
-        actions: [
-          TextButton(
-            onPressed: (_canSave && !_saving) ? _save : null,
-            child: _saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Save'),
-          ),
-        ],
-      ),
-      body: SafeArea(
+      appBar: AppBar(title: Text(widget.habit == null ? 'New Habit' : 'Edit Habit')),
+      body: Form(
+        key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            TextField(
+            TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(labelText: 'Habit title'),
-              onChanged: (_) => setState(() {}),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a title' : null,
             ),
             const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+            TextFormField(
+              controller: _descController,
               maxLines: 2,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            Text('Category', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
-            categoriesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('Could not load categories: $e'),
-              data: (categories) => Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  for (final c in categories)
-                    MultiSelectChip(
-                      label: c.label,
-                      selected: _categoryKey == c.key,
-                      onTap: () => setState(() => _categoryKey = c.key),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            Text('Icon', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              height: 56,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: HabitVisuals.selectableIcons.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, i) {
-                  final iconKey = HabitVisuals.selectableIcons[i];
-                  final selected = _icon == iconKey;
-                  return GestureDetector(
-                    onTap: () => setState(() => _icon = iconKey),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: selected ? HabitVisuals.colorFrom(_color).withValues(alpha: 0.15) : null,
-                        border: Border.all(
-                          color: selected ? HabitVisuals.colorFrom(_color) : AppColors.divider,
-                          width: selected ? 2 : 1,
-                        ),
-                      ),
-                      child: Icon(HabitVisuals.iconFor(iconKey),
-                          color: selected ? HabitVisuals.colorFrom(_color) : AppColors.textSecondary),
-                    ),
-                  );
-                },
-              ),
+              decoration: const InputDecoration(labelText: 'Notes (optional)'),
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            Text('Color', style: Theme.of(context).textTheme.titleLarge),
+            Text('Category', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: HabitVisuals.selectableColors.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, i) {
-                  final hex = HabitVisuals.selectableColors[i];
-                  final selected = _color == hex;
-                  return GestureDetector(
-                    onTap: () => setState(() => _color = hex),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: HabitVisuals.colorFrom(hex),
-                        shape: BoxShape.circle,
-                        border: selected ? Border.all(color: AppColors.textPrimary, width: 2) : null,
-                      ),
-                      child: selected ? const Icon(Icons.check_rounded, color: Colors.white, size: 16) : null,
-                    ),
-                  );
-                },
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final c in _kCategoryOptions)
+                  ChoiceChip(
+                    label: Text(c.$2),
+                    avatar: Icon(c.$3, size: 16),
+                    selected: _categoryKey == c.$1,
+                    onSelected: (_) => setState(() => _categoryKey = c.$1),
+                  ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
-            Text('Frequency', style: Theme.of(context).textTheme.titleLarge),
+            Text('Color', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                for (final color in _kColorOptions)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _color = color),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: _color == color
+                              ? Border.all(color: Colors.black.withValues(alpha: 0.4), width: 2)
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            Text('Frequency', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
               children: [
-                MultiSelectChip(
-                  label: 'Daily',
-                  selected: _frequencyType == 'daily',
-                  onTap: () => setState(() => _frequencyType = 'daily'),
+                ChoiceChip(
+                  label: const Text('Daily'),
+                  selected: _frequencyType == HabitFrequencyType.daily,
+                  onSelected: (_) => setState(() => _frequencyType = HabitFrequencyType.daily),
                 ),
-                MultiSelectChip(
-                  label: 'Weekly',
-                  selected: _frequencyType == 'weekly',
-                  onTap: () => setState(() => _frequencyType = 'weekly'),
+                ChoiceChip(
+                  label: const Text('Weekly'),
+                  selected: _frequencyType == HabitFrequencyType.weekly,
+                  onSelected: (_) => setState(() => _frequencyType = HabitFrequencyType.weekly),
                 ),
-                MultiSelectChip(
-                  label: 'X times/week',
-                  selected: _frequencyType == 'x_times_per_week',
-                  onTap: () => setState(() => _frequencyType = 'x_times_per_week'),
+                ChoiceChip(
+                  label: const Text('X times/week'),
+                  selected: _frequencyType == HabitFrequencyType.xTimesPerWeek,
+                  onSelected: (_) => setState(() => _frequencyType = HabitFrequencyType.xTimesPerWeek),
                 ),
               ],
             ),
-            if (_frequencyType == 'x_times_per_week') ...[
+            if (_frequencyType == HabitFrequencyType.xTimesPerWeek) ...[
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
                   const Text('Times per week:'),
-                  Expanded(
-                    child: Slider(
-                      value: _timesPerWeek.toDouble(),
-                      min: 1,
-                      max: 7,
-                      divisions: 6,
-                      label: '$_timesPerWeek',
-                      onChanged: (v) => setState(() => _timesPerWeek = v.round()),
-                    ),
+                  const SizedBox(width: AppSpacing.sm),
+                  DropdownButton<int>(
+                    value: _timesPerWeek,
+                    items: [for (int i = 1; i <= 7; i++) DropdownMenuItem(value: i, child: Text('$i'))],
+                    onChanged: (v) {
+                      if (v != null) setState(() => _timesPerWeek = v);
+                    },
                   ),
-                  Text('$_timesPerWeek'),
                 ],
               ),
             ],
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
-            Text('Priority', style: Theme.of(context).textTheme.titleLarge),
+            Text('Priority', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
               children: [
-                for (final p in const ['low', 'medium', 'high'])
-                  MultiSelectChip(
-                    label: p[0].toUpperCase() + p.substring(1),
+                for (final p in HabitPriority.values)
+                  ChoiceChip(
+                    label: Text(p.name[0].toUpperCase() + p.name.substring(1)),
                     selected: _priority == p,
-                    onTap: () => setState(() => _priority = p),
+                    onSelected: (_) => setState(() => _priority = p),
                   ),
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Reminders', style: Theme.of(context).textTheme.titleLarge),
-                TextButton.icon(
-                  onPressed: () async {
-                    final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                    if (picked != null) setState(() => _reminders.add(picked));
-                  },
-                  icon: const Icon(Icons.add_alarm_rounded, size: 18),
-                  label: const Text('Add'),
-                ),
-              ],
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        height: 20, width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                    : Text(widget.habit == null ? 'Create Habit' : 'Save Changes'),
+              ),
             ),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                for (int i = 0; i < _reminders.length; i++)
-                  Chip(
-                    label: Text(_reminders[i].format(context)),
-                    onDeleted: () => setState(() => _reminders.removeAt(i)),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xxl),
           ],
         ),
       ),
