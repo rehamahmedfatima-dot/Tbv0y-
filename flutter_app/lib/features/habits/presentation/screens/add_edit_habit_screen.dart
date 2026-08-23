@@ -35,7 +35,18 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
   bool get _canSave => _titleController.text.trim().isNotEmpty && _categoryKey != null;
 
   Future<void> _save() async {
-    if (!_canSave) return;
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a habit title')),
+      );
+      return;
+    }
+    if (_categoryKey == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a category')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref.read(habitsProvider.notifier).addHabit(
@@ -73,7 +84,7 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
         title: const Text('New Habit'),
         actions: [
           TextButton(
-            onPressed: (_canSave && !_saving) ? _save : null,
+            onPressed: _saving ? null : _save,
             child: _saving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Save'),
