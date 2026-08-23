@@ -67,20 +67,29 @@ Respond with ONLY valid JSON matching this exact shape, no prose:
 }
 ''';
 
-    // Gemini being unavailable (broken key, network issue, timeout) must
-    // never block onboarding — fall back to a safe default identity set
-    // whenever the AI call fails OR returns something we can't use.
-    final raw = await _ai.generateJson(prompt);
-    try {
-      final parsed = jsonDecode(raw) as Map<String, dynamic>;
-      final list = (parsed['identities'] as List<dynamic>? ?? []);
-      if (list.isEmpty) return _fallbackIdentities;
-      return list
-          .map((e) => SuggestedIdentity.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      return _fallbackIdentities;
-    }
+    // Gemini must never block onboarding.
+// If Gemini fails, times out, or returns invalid JSON,
+// use the local fallback identities immediately.
+try {
+  final raw = await _ai
+      .generateJson(prompt)
+      .timeout(const Duration(seconds: 10));
+
+  final parsed = jsonDecode(raw) as Map<String, dynamic>;
+  final list = parsed['identities'] as List<dynamic>? ?? [];
+
+  if (list.isEmpty) {
+    return _fallbackIdentities;
+  }
+
+  return list
+      .map((e) => SuggestedIdentity.fromJson(
+            e as Map<String, dynamic>,
+          ))
+      .toList();
+} catch (_) {
+  return _fallbackIdentities;
+}
   }
 
   @override
